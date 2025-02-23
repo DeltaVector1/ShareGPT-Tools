@@ -2,9 +2,12 @@ import jsonlines
 import os
 import logging
 import language_tool_python
+import argparse
+from typing import Dict
+from tqdm import tqdm
 
 class GrammarMaxxer:
-    def __init__(self, input_file, toggles):
+    def __init__(self, input_file: str, toggles: Dict[str, bool]):
         self.input_file = input_file
         self.toggles = toggles
         self.tool = language_tool_python.LanguageTool('en-US')
@@ -25,11 +28,16 @@ class GrammarMaxxer:
 
     def process_file(self, output_file, update_corrections_callback):
         """Process the input file and write the corrected text to the output file."""
+        # First count the lines
+        total_lines = sum(1 for _ in jsonlines.open(self.input_file))
+        
         with jsonlines.open(self.input_file) as reader:
             with jsonlines.open(output_file, mode='w') as writer:
-                for conversation in reader:
-                    corrected_conversation = self.correct_conversation(conversation, update_corrections_callback)
-                    writer.write(corrected_conversation)
+                with tqdm(total=total_lines, desc="Processing conversations") as pbar:
+                    for conversation in reader:
+                        corrected_conversation = self.correct_conversation(conversation, update_corrections_callback)
+                        writer.write(corrected_conversation)
+                        pbar.update(1)
 
     def correct_conversation(self, conversation, update_corrections_callback):
         """Correct the text in a conversation and update the live tracker."""
@@ -47,7 +55,7 @@ class GrammarMaxxer:
             'grammar': self.correct_with_grammar
         }
         for key, func in corrections.items():
-            if self.toggles[key].get() == 'on':
+            if self.toggles[key] == 'on':
                 text = func(text)
         return text.strip()
 
@@ -56,3 +64,47 @@ class GrammarMaxxer:
         matches = self.tool.check(text)
         corrected_text = language_tool_python.utils.correct(text, matches)
         return corrected_text
+
+
+def cli_progress_callback(original: str, corrected: str) -> None:
+    """Simple progress callback for CLI usage."""
+    if original != corrected:
+        tqdm.write("Made corrections:")
+        tqdm.write(f"Original: {original[:100]}...")
+        tqdm.write(f"Corrected: {corrected[:100]}...")
+        tqdm.write("-" * 80)
+
+
+def main():
+    """Main CLI entry point."""
+    parser = argparse.ArgumentParser(description="Grammar correction tool for JSONL conversation files")
+    parser.add_argument("input_file", help="Input JSONL file to process")
+    parser.add_argument("--disable-grammar", action="store_false", dest="grammar",
+                       help="Disable grammar correction")
+    
+    args = parser.parse_args()
+    
+    # Convert args to toggles format
+    toggles = {
+        "grammar": "on" if args.grammar else "off"
+    }
+    
+    # Setup logging
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    
+    # Initialize and run the grammar maxxer
+    maxxer = GrammarMaxxer(args.input_file, toggles)
+    
+    if not maxxer.validate_file():
+        return
+    
+    output_file = maxxer.prepare_output_file()
+    print(f"Processing {args.input_file}")
+    print(f"Output will be saved to {output_file}")
+    
+    maxxer.process_file(output_file, cli_progress_callback)
+    print("\nProcessing complete!")
+
+
+if __name__ == "__main__":
+    main()
