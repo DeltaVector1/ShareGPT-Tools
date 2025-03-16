@@ -1,3 +1,6 @@
 *.jsonl
 Data/
 corrected/
+.ipynb_checkpoints/test-checkpoint.py
+.ipynb_checkpoints/f-checkpoint.txt
+.ipynb_checkpoints/filterer-checkpoint.py

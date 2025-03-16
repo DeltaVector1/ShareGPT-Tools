@@ -1,0 +1,24 @@
+2025-03-08 15:54:11,008 - ERROR - Error during SHA-256 deduplication: expected str, bytes or os.PathLike object, not NoneType
+Traceback (most recent call last):
+  File "/home/mango/Misc/Scripts/ShareGPT-Tools/deduplication.py", line 29, in perform_sha256_deduplication
+    with open(input_file, 'r', encoding='utf-8') as f_in, open(output_file, 'w', encoding='utf-8') as f_out:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: expected str, bytes or os.PathLike object, not NoneType
+2025-03-08 15:54:16,394 - ERROR - Error during SHA-256 deduplication: expected str, bytes or os.PathLike object, not NoneType
+Traceback (most recent call last):
+  File "/home/mango/Misc/Scripts/ShareGPT-Tools/deduplication.py", line 29, in perform_sha256_deduplication
+    with open(input_file, 'r', encoding='utf-8') as f_in, open(output_file, 'w', encoding='utf-8') as f_out:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: expected str, bytes or os.PathLike object, not NoneType
+2025-03-08 15:55:01,259 - ERROR - Error during MinHash deduplication: [Errno 2] No such file or directory: '/home/mango/Misc/Scripts/ShareGPT-Tools/deslopped/output_analyzed_deslopped.jsonl'
+Traceback (most recent call last):
+  File "/home/mango/Misc/Scripts/ShareGPT-Tools/deduplication.py", line 54, in perform_min_hash_deduplication
+    with open(input_file, 'r', encoding='utf-8') as f_in, open(output_file, 'w', encoding='utf-8') as f_out:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/mango/Misc/Scripts/ShareGPT-Tools/deslopped/output_analyzed_deslopped.jsonl'
+2025-03-08 15:55:27,513 - ERROR - Error during MinHash deduplication: [Errno 2] No such file or directory: './deslop'
+Traceback (most recent call last):
+  File "/home/mango/Misc/Scripts/ShareGPT-Tools/deduplication.py", line 54, in perform_min_hash_deduplication
+    with open(input_file, 'r', encoding='utf-8') as f_in, open(output_file, 'w', encoding='utf-8') as f_out:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: './deslop'
