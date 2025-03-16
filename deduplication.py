@@ -102,18 +102,25 @@ def update_progress(current, total):
 
 def main():
     parser = argparse.ArgumentParser(description="Deduplication tool for conversations")
-    parser.add_argument('--input-file', type=str, help="Input JSONL file with conversations")
-    parser.add_argument('--output-file', type=str, help="Output JSONL file for deduplicated conversations")
+    parser.add_argument('input', help="Input JSONL file with conversations")
+    parser.add_argument('output_dir', help="Directory to save deduplicated output")
     parser.add_argument('--method', choices=['sha256', 'minhash'], default='sha256', help="Deduplication method to use (default: sha256)")
     parser.add_argument('--threshold', type=float, default=0.8, help="Threshold for MinHash deduplication (default: 0.8)")
 
     args = parser.parse_args()
     dedup = Deduplication(threshold=args.threshold)
+    
+    # Create output directory
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    # Generate output file path
+    base_name = os.path.splitext(os.path.basename(args.input))[0]
+    output_file = os.path.join(args.output_dir, f"{base_name}_deduplicated.jsonl")
 
     if args.method == 'sha256':
-        dedup.perform_sha256_deduplication(args.input_file, args.output_file, update_status, update_progress)
+        dedup.perform_sha256_deduplication(args.input, output_file, update_status, update_progress)
     elif args.method == 'minhash':
-        dedup.perform_min_hash_deduplication(args.input_file, args.output_file, update_status, update_progress)
+        dedup.perform_min_hash_deduplication(args.input, output_file, update_status, update_progress)
 
 if __name__ == "__main__":
     main()

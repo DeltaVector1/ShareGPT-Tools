@@ -52,12 +52,12 @@ def write_filtered_jsonl(filtered_data, output_file_path):
             json.dump(conversation, file, ensure_ascii=False)
             file.write('\n')
 
-def filter_dataset(dataset_file, filter_files, threshold=None):
+def filter_dataset(dataset_file, output_dir, filter_files, threshold=None):
     filter_criteria = load_filter_criteria(filter_files)
     data = load_jsonl(dataset_file)
     filtered_data, filtered_count, total_matched_phrases, removed_conversation_count = filter_conversations(data, filter_criteria, threshold)
 
-    output_folder = Path(__file__).parent / "deslopped"
+    output_folder = Path(output_dir)
     output_folder.mkdir(parents=True, exist_ok=True)
 
     dataset_name = Path(dataset_file).stem
@@ -76,9 +76,10 @@ def filter_dataset(dataset_file, filter_files, threshold=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Filter conversations based on specific criteria.")
-    parser.add_argument("--dataset", required=True, help="Path to the dataset JSONL file.")
-    parser.add_argument("--filters", required=True, nargs="+", help="Path to one or more filter files.")
-    parser.add_argument("--threshold", type=float, default=None, help="Threshold multiplier for filtering.")
+    parser.add_argument("input", help="Path to the dataset JSONL file")
+    parser.add_argument("output_dir", help="Directory to save the filtered output")
+    parser.add_argument("--filters", required=True, nargs="+", help="Path to one or more filter files")
+    parser.add_argument("--threshold", type=float, default=None, help="Threshold multiplier for filtering")
     
     args = parser.parse_args()
-    print(filter_dataset(args.dataset, args.filters, args.threshold))
+    print(filter_dataset(args.input, args.output_dir, args.filters, args.threshold))

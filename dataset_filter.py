@@ -144,8 +144,8 @@ def update_progress(current, total):
 
 def main():
     parser = argparse.ArgumentParser(description="Dataset filtering tool for conversations")
-    parser.add_argument('--input-file', type=str, help="Input JSONL file with conversations")
-    parser.add_argument('--output-dir', type=str, help="Output directory for filtered conversations")
+    parser.add_argument('input', help="Input JSONL file with conversations")
+    parser.add_argument('output_dir', help="Output directory for filtered conversations")
     parser.add_argument('--check_blank_turns', action='store_true', default=True, help="Enable blank turn filtering")
     parser.add_argument('--check_invalid_endings', action='store_true', default=True, help="Enable invalid ending filtering")
     parser.add_argument('--check_null_gpt', action='store_true', default=True, help="Enable null GPT response filtering")
@@ -156,7 +156,7 @@ def main():
 
     # Perform filtering
     result = filter_dataset(
-        input_path=args.input_file,
+        input_path=args.input,
         output_dir=args.output_dir,
         check_blank_turns=args.check_blank_turns,
         check_invalid_endings=args.check_invalid_endings,

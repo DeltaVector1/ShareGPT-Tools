@@ -59,8 +59,8 @@ def process_jsonl(input_file, output_dir):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parse and reorder ShareGPT JSONL files.")
-    parser.add_argument("--input", required=True, help="Path to input JSONL file")
-    parser.add_argument("--output-dir", required=True, help="Directory to save the output file")
+    parser.add_argument("input", help="Path to input JSONL file")
+    parser.add_argument("output_dir", help="Directory to save the output file")
 
     args = parser.parse_args()
     process_jsonl(args.input, args.output_dir)

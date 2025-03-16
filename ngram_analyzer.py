@@ -95,7 +95,8 @@ def process_jsonl(filename, role_filter, no_punctuation=False):
 
 def main():
     parser = argparse.ArgumentParser(description="Process a JSONL file and extract n-grams from GPT conversations.")
-    parser.add_argument('filename', type=str, help="Path to the JSONL file")
+    parser.add_argument('input', help="Path to the JSONL file")
+    parser.add_argument('output_dir', nargs='?', help="Directory to save output (optional)")
     parser.add_argument('--role_filter', type=str, nargs='+', default=['gpt'], choices=['gpt', 'system', 'all'],
                         help="Role(s) to filter by ('gpt', 'system', or 'all'). Default is 'gpt'.")
     parser.add_argument('--min_ngram', type=int, default=3, help="Minimum n-gram length (default is 3).")
@@ -106,7 +107,7 @@ def main():
 
     args = parser.parse_args()
 
-    lines = process_jsonl(args.filename, args.role_filter, no_punctuation=args.no_punctuation)
+    lines = process_jsonl(args.input, args.role_filter, no_punctuation=args.no_punctuation)
 
     ngrams = count_ngrams(lines, min_length=args.min_ngram, max_length=args.max_ngram,
                           stopword_limit=args.stopword_limit, punctuation_limit=args.punctuation_limit,
@@ -117,6 +118,19 @@ def main():
         print(f"\n{n}-grams:")
         for ngram, count in counts.most_common(10):
             print(f"{' '.join(ngram)}: {count}")
+            
+    if args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+        output_file = os.path.join(args.output_dir, f"{os.path.basename(args.input)}_ngram_analysis.json")
+        
+        # Convert Counter objects to dictionaries for JSON serialization
+        output_data = {}
+        for n, counts in ngrams.items():
+            output_data[str(n)] = {' '.join(ngram): count for ngram, count in counts.most_common(50)}
+            
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        print(f"\nAnalysis saved to {output_file}")
 
 if __name__ == "__main__":
     main()

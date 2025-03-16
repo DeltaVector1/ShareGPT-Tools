@@ -78,7 +78,8 @@ def cli_progress_callback(original: str, corrected: str) -> None:
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(description="Grammar correction tool for JSONL conversation files")
-    parser.add_argument("input_file", help="Input JSONL file to process")
+    parser.add_argument("input", help="Input JSONL file to process")
+    parser.add_argument("output_dir", help="Directory to save the corrected output")
     parser.add_argument("--disable-grammar", action="store_false", dest="grammar",
                        help="Disable grammar correction")
     
@@ -92,14 +93,20 @@ def main():
     # Setup logging
     logging.basicConfig(level=logging.INFO, format='%(message)s')
     
+    # Create output directory
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    # Generate output file path
+    base_name = os.path.splitext(os.path.basename(args.input))[0]
+    output_file = os.path.join(args.output_dir, f"{base_name}_corrected.jsonl")
+    
     # Initialize and run the grammar maxxer
-    maxxer = GrammarMaxxer(args.input_file, toggles)
+    maxxer = GrammarMaxxer(args.input, toggles)
     
     if not maxxer.validate_file():
         return
     
-    output_file = maxxer.prepare_output_file()
-    print(f"Processing {args.input_file}")
+    print(f"Processing {args.input}")
     print(f"Output will be saved to {output_file}")
     
     maxxer.process_file(output_file, cli_progress_callback)

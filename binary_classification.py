@@ -23,7 +23,7 @@ def initialize_models():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-def process_file(input_file, threshold, batch_size):
+def process_file(input_file, output_dir, threshold, batch_size):
     if not input_file.endswith('.jsonl'):
         raise ValueError("Input file must be a .jsonl file")
     
@@ -35,7 +35,6 @@ def process_file(input_file, threshold, batch_size):
     if batch_size <= 0:
         raise ValueError("Batch size must be a positive integer.")
     
-    output_dir = "classified"
     os.makedirs(output_dir, exist_ok=True)
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     output_file = os.path.join(output_dir, f"{base_name}-classified.jsonl")
@@ -159,11 +158,12 @@ def validate_utf8(text):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Filter JSONL conversations based on sentiment analysis")
-    parser.add_argument("--input", required=True, help="Path to the input JSONL file")
+    parser.add_argument("input", help="Path to the input JSONL file")
+    parser.add_argument("output_dir", help="Directory to save the classified output")
     parser.add_argument("--threshold", type=float, required=True, help="Rejection threshold (0.0 to 1.0)")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for processing (default: 32)")
     
     args = parser.parse_args()
     
     initialize_models()
-    process_file(args.input, args.threshold, args.batch_size)
+    process_file(args.input, args.output_dir, args.threshold, args.batch_size)

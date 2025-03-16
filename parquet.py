@@ -35,8 +35,14 @@ def parquet_to_jsonl(input_path: str, output_path: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert Parquet to JSONL")
-    parser.add_argument("--input", required=True, help="Input parquet file")
-    parser.add_argument("--output", required=True, help="Output JSONL file")
+    parser.add_argument("input", help="Input parquet file")
+    parser.add_argument("output_dir", help="Directory to save the output JSONL file")
     args = parser.parse_args()
-
-    parquet_to_jsonl(args.input, args.output)
+    
+    # Create output directory
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    # Generate output file path
+    output_file = os.path.join(args.output_dir, f"{os.path.splitext(os.path.basename(args.input))[0]}.jsonl")
+    
+    parquet_to_jsonl(args.input, output_file)

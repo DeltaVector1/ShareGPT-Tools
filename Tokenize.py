@@ -57,25 +57,27 @@ def process_folder(input_dir: str, tokenizer, pattern: str = "*.jsonl") -> int:
 
 def main():
     parser = argparse.ArgumentParser(description="Count GPT tokens in ShareGPT format")
-    parser.add_argument("input_dir", help="Directory containing input JSONL files")
+    parser.add_argument("input", help="Directory containing input JSONL files")
+    parser.add_argument("output_dir", nargs="?", help="Directory to save output summary (optional)")
     parser.add_argument("--tokenizer", default="gpt2", help="HuggingFace tokenizer to use (default: gpt2)")
     parser.add_argument("--pattern", default="*.jsonl", help="File pattern to match (default: *.jsonl)")
-    parser.add_argument("--output", help="Output file to save token count summary (optional)")
     args = parser.parse_args()
 
     print(f"Loading {args.tokenizer} tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer, use_fast=True)
 
-    total_tokens = process_folder(args.input_dir, tokenizer, args.pattern)
+    total_tokens = process_folder(args.input, tokenizer, args.pattern)
 
     print("\nToken Count Summary:")
     print(f"Total GPT tokens: {total_tokens:,}")
 
-    if args.output:
+    if args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+        output_file = os.path.join(args.output_dir, "token_count_summary.json")
         summary = {"total_gpt_tokens": total_tokens}
-        with open(args.output, 'w') as f:
+        with open(output_file, 'w') as f:
             json.dump(summary, f, indent=2)
-        print(f"\nSummary saved to {args.output}")
+        print(f"\nSummary saved to {output_file}")
 
 if __name__ == "__main__":
     main()

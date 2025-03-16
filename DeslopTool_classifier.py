@@ -89,15 +89,21 @@ class CharacterSlopFilter:
 
 async def main():
     parser = argparse.ArgumentParser(description="Filter JSONL conversations using a text classifier.")
-    parser.add_argument("input_file", help="Path to the input JSONL file")
-    parser.add_argument("output_file", help="Path to save the filtered output JSONL file")
+    parser.add_argument("input", help="Path to the input JSONL file")
+    parser.add_argument("output_dir", help="Directory to save the filtered output")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for classification")
     parser.add_argument("--confidence_margin", type=float, default=0.1, help="Confidence margin for classification")
 
     args = parser.parse_args()
-
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    # Generate output file path
+    output_file = os.path.join(args.output_dir, os.path.basename(args.input).replace('.jsonl', '_filtered.jsonl'))
+    
     slop_filter = CharacterSlopFilter(batch_size=args.batch_size, confidence_margin=args.confidence_margin)
-    await slop_filter.filter_conversations(args.input_file, args.output_file)
+    await slop_filter.filter_conversations(args.input, output_file)
 
 if __name__ == "__main__":
     asyncio.run(main())

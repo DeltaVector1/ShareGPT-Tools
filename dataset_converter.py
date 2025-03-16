@@ -194,10 +194,10 @@ class DatasetConverter:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert JSON/JSONL datasets into structured conversation format.")
-    parser.add_argument("--input-files", nargs="+", help="Input file paths (JSON/JSONL).")
-    parser.add_argument("--output-dir", help="Output directory for the processed files.")
+    parser.add_argument("input", nargs="+", help="Input file paths (JSON/JSONL)")
+    parser.add_argument("output_dir", help="Output directory for the processed files")
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
     converter = DatasetConverter()
-    preview = converter.process_multiple_files(args.input_files, args.output_dir)
+    preview = converter.process_multiple_files(args.input, args.output_dir)
     print("Preview of processed conversations:", json.dumps(preview, indent=2, ensure_ascii=False))
