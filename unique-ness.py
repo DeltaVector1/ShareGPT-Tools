@@ -1,68 +1,52 @@
 import json
 import argparse
+import re
 import os
 
-def reorder_fields(json_obj):
-    """Reorder fields in a JSON object with special handling for system messages."""
-    if "conversations" in json_obj:
-        ordered_conversations = []
-        for conv in json_obj["conversations"]:
-            if "from" in conv and "value" in conv:
-                ordered_conv = {
-                    "from": conv["from"],
-                    "value": conv["value"],
-                    "loss": conv.get("loss", True)
-                }
-
-                if conv["from"] != "system" and "prefix" in conv:
-                    ordered_conv["prefix"] = conv["prefix"]
-
-                ordered_conversations.append(ordered_conv)
-        return {"conversations": ordered_conversations}
-
-    elif "from" in json_obj and "value" in json_obj:
-        ordered_conv = {
-            "from": json_obj["from"],
-            "value": json_obj["value"],
-            "loss": json_obj.get("loss", True)
-        }
-
-        if json_obj["from"] != "system" and "prefix" in json_obj:
-            ordered_conv["prefix"] = json_obj["prefix"]
-
-        return ordered_conv
+def analyze_diversity(text):
+    words = re.findall(r'\b\w+\b', text.lower())
+    word_count = len(words)
+    unique_words = len(set(words))
+    
+    if word_count > 0:
+        diversity_score = unique_words / word_count
     else:
-        print(f"Warning: Malformed object without required fields: {json_obj}")
-        return json_obj
+        diversity_score = 0
+        
+    return diversity_score
 
-def process_jsonl(input_file, output_file):
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-
-    with open(input_file, "r", encoding="utf-8") as infile, open(output_file, "w", encoding="utf-8") as outfile:
-        for line_num, line in enumerate(infile, 1):
-            try:
-                if line.strip():  
-                    json_obj = json.loads(line.strip())
-                    reordered_obj = reorder_fields(json_obj)
-                    outfile.write(json.dumps(reordered_obj) + "\n")
-            except json.JSONDecodeError as e:
-                print(f"Line {line_num}: Invalid JSON - {e}")
-            except Exception as e:
-                print(f"Line {line_num}: Error processing - {e}")
-
-    print(f"Processed file saved to {output_file}")
+def process_jsonl(input_dir, output_dir, threshold):
+    os.makedirs(output_dir, exist_ok=True)
+    
+    for filename in os.listdir(input_dir):
+        if not filename.endswith('.jsonl'):
+            continue
+            
+        input_path = os.path.join(input_dir, filename)
+        output_path = os.path.join(output_dir, filename)
+        
+        with open(input_path, 'r', encoding='utf-8') as infile, open(output_path, 'w', encoding='utf-8') as outfile:
+            for line in infile:
+                convo = json.loads(line.strip())
+                
+                # Calculate average diversity score for all messages in the conversation
+                scores = []
+                for msg in convo.get('conversations', []):
+                    content = msg.get('value', '')
+                    score = analyze_diversity(content)
+                    scores.append(score)
+                
+                avg_diversity = sum(scores) / len(scores) if scores else 0
+                
+                # Only write conversations that meet the threshold
+                if avg_diversity >= threshold:
+                    outfile.write(line)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Parse and reorder ShareGPT JSONL files.")
-    parser.add_argument("input", help="Path to input JSONL file")
-    parser.add_argument("output_dir", help="Directory to save the output file")
-
+    parser = argparse.ArgumentParser(description='Filter ShareGPT JSONL files by word diversity')
+    parser.add_argument('input_dir', help='Directory containing input JSONL files')
+    parser.add_argument('output_dir', help='Directory to write filtered JSONL files')
+    parser.add_argument('--threshold', type=float, default=0.5, help='Minimum diversity score threshold')
+    
     args = parser.parse_args()
-    
-    # Create output directory
-    os.makedirs(args.output_dir, exist_ok=True)
-    
-    # Generate output file path
-    output_file = os.path.join(args.output_dir, os.path.basename(args.input))
-    
-    process_jsonl(args.input, output_file)
+    process_jsonl(args.input_dir, args.output_dir, args.threshold)

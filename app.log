@@ -22,3 +22,29 @@ Traceback (most recent call last):
     with open(input_file, 'r', encoding='utf-8') as f_in, open(output_file, 'w', encoding='utf-8') as f_out:
          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 FileNotFoundError: [Errno 2] No such file or directory: './deslop'
+2025-04-01 23:51:03,426 - ERROR - Error during MinHash deduplication: RMinHashLSH.__new__() missing 1 required positional argument: 'num_bands'
+Traceback (most recent call last):
+  File "/home/mango/Misc/Scripts/ShareGPT-Tools/deduplication.py", line 48, in perform_min_hash_deduplication
+    self.lsh = RMinHashLSH(threshold=self.threshold, num_perm=128)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: RMinHashLSH.__new__() missing 1 required positional argument: 'num_bands'
+2025-04-01 23:52:13,717 - ERROR - Error during MinHash deduplication: RMinHashLSH.__new__() missing 1 required positional argument: 'threshold'
+Traceback (most recent call last):
+  File "/home/mango/Misc/Scripts/ShareGPT-Tools/deduplication.py", line 52, in perform_min_hash_deduplication
+    self.lsh = RMinHashLSH(num_perm=num_perm, num_bands=num_bands)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: RMinHashLSH.__new__() missing 1 required positional argument: 'threshold'
+2025-04-01 23:52:53,669 - ERROR - Error during MinHash deduplication: argument 'items': 'int' object cannot be converted to 'PyString'
+Traceback (most recent call last):
+  File "/home/mango/Misc/Scripts/ShareGPT-Tools/deduplication.py", line 64, in perform_min_hash_deduplication
+    m = self.generate_min_hash(shingles)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mango/Misc/Scripts/ShareGPT-Tools/deduplication.py", line 100, in generate_min_hash
+    m.update(shingle.encode('utf-8'))
+TypeError: argument 'items': 'int' object cannot be converted to 'PyString'
+2025-04-01 23:53:40,329 - ERROR - Error during MinHash deduplication: argument 'key': 'str' object cannot be interpreted as an integer
+Traceback (most recent call last):
+  File "/home/mango/Misc/Scripts/ShareGPT-Tools/deduplication.py", line 67, in perform_min_hash_deduplication
+    self.lsh.insert(str(i), m)  # Using index as key, converted to string
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: argument 'key': 'str' object cannot be interpreted as an integer

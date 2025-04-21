@@ -12,7 +12,7 @@ MODEL_NAME = "protectai/distilroberta-base-rejection-v1"
 nlp = None
 tokenizer = None
 model = None
-device = 'cuda'
+device = 'cpu'
 
 def initialize_models():
     global nlp, tokenizer, model, device
