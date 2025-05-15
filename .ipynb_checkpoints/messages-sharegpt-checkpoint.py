@@ -21,4 +21,4 @@ def convert_to_sharegpt(input_file, output_file):
             f_out.write(json.dumps(sharegpt_format) + '\n')
 
 # Usage
-convert_to_sharegpt('train-00000-of-00001.jsonl', 'tulu-personas.jsonl')
+convert_to_sharegpt('charcards-deepseek-v3.jsonl', 'charcards-deepseek-v3-fixed.jsonl')

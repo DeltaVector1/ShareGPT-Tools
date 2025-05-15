@@ -3,115 +3,142 @@ import json
 import hashlib
 import logging
 import argparse
-from rensa import RMinHash, RMinHashLSH
+import multiprocessing as mp
+from pathlib import Path
+from functools import partial
+from rensa import RMinHash
 import jsonlines
+from tqdm import tqdm
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("app.log"),
-        logging.StreamHandler()
-    ]
-)
+# Configure logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("app.log"),
+                        logging.StreamHandler()
+                    ])
 
 class Deduplication:
-    def __init__(self, threshold=0.8):
+    def __init__(self, threshold=0.8, num_processes=None):
         self.duplicate_count = 0
-        self.unique_conversations = set()  
-        self.threshold = threshold         
-        self.lsh = None                    
-
-    def perform_sha256_deduplication(self, input_file, output_file, update_status, update_progress):
-        """Exact deduplication using SHA-256 hashing."""
-        try:
-            with open(input_file, 'r', encoding='utf-8') as f_in, open(output_file, 'w', encoding='utf-8') as f_out:
-                reader = jsonlines.Reader(f_in)
-                total_lines = sum(1 for _ in f_in)
-                f_in.seek(0)
-                for i, conversation in enumerate(reader):
-                    update_progress(i, total_lines)
-                    conversation_id = self.generate_sha256_hash(conversation)
-                    if conversation_id in self.unique_conversations:
-                        self.duplicate_count += 1
-                        continue
-                    self.unique_conversations.add(conversation_id)
-                    f_out.write(json.dumps(conversation, ensure_ascii=False) + '\n')
-                update_status(f"Deduplication complete. Output file: {output_file}")
-        except Exception as e:
-            logging.error(f"Error during SHA-256 deduplication: {e}", exc_info=True)
-
-    def perform_min_hash_deduplication(self, input_file, output_file, update_status, update_progress):
-        try:
-            num_perm = 128
-            num_bands = self._calc_optimal_bands(num_perm, self.threshold)
+        self.unique_hashes = set()  # For storing unique hashes
+        self.threshold = threshold
+        self.num_processes = num_processes or max(1, mp.cpu_count() - 1)
+        self.num_perm = 128  # Number of permutations for MinHash
+    
+    def process_chunk(self, chunk, method):
+        """Process a chunk of conversations."""
+        results = []
+        local_unique_hashes = set()  # Local set to avoid race conditions
+        
+        for conversation in chunk:
+            conversation_text = ''.join(turn['value'] for turn in conversation.get('conversations', []) 
+                                      if turn.get('value') is not None)
             
-            self.lsh = RMinHashLSH(threshold=self.threshold, num_perm=num_perm, num_bands=num_bands)
+            if method == 'sha256':
+                hash_value = self.generate_sha256_hash(conversation_text)
+                if hash_value not in self.unique_hashes and hash_value not in local_unique_hashes:
+                    local_unique_hashes.add(hash_value)
+                    results.append(conversation)
             
-            with open(input_file, 'r', encoding='utf-8') as f_in, open(output_file, 'w', encoding='utf-8') as f_out:
-                reader = jsonlines.Reader(f_in)
-                total_lines = sum(1 for _ in f_in)
-                f_in.seek(0)
-                for i, conversation in enumerate(reader):
-                    update_progress(i, total_lines)
-                    conversation_text = ''.join(turn['value'] for turn in conversation.get('conversations', []) if turn.get('value') is not None)
+            elif method == 'minhash':
+                minhash = self.generate_rminhash(conversation_text)
+                hash_tuple = tuple(minhash.digest())
+                if hash_tuple not in self.unique_hashes and hash_tuple not in local_unique_hashes:
+                    local_unique_hashes.add(hash_tuple)
+                    results.append(conversation)
                     
-                    m = self.generate_min_hash(conversation_text)
-                    
-                    if not self.lsh.query(m):
-                        self.lsh.insert(i, m)  
-                        f_out.write(json.dumps(conversation, ensure_ascii=False) + '\n')
+        return results, local_unique_hashes
+    
+    def perform_deduplication(self, input_file, output_dir, method='sha256'):
+        """Perform deduplication using specified method."""
+        try:
+            output_file = os.path.join(output_dir, f"deduplicated_{os.path.basename(input_file)}")
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            
+            # Read all data
+            with jsonlines.open(input_file) as reader:
+                data = list(reader)
+            
+            # Split data into chunks for parallel processing
+            chunk_size = max(100, len(data) // (self.num_processes * 10))
+            chunks = [data[i:i+chunk_size] for i in range(0, len(data), chunk_size)]
+            
+            with mp.Pool(self.num_processes) as pool:
+                process_func = partial(self.process_chunk, method=method)
+                processed_results = list(tqdm(pool.imap(process_func, chunks), 
+                                        total=len(chunks), 
+                                        desc=f"Processing with {method}"))
+            
+            # Combine results while checking for duplicates across processes
+            unique_data = []
+            for results, local_hashes in processed_results:
+                for hash_val in local_hashes:
+                    if hash_val not in self.unique_hashes:
+                        self.unique_hashes.add(hash_val)
                     else:
+                        # This is a duplicate found across processes
                         self.duplicate_count += 1
-                update_status(f"Deduplication complete. Output file: {output_file}")
+            
+            # Second pass to collect unique items
+            for idx, (results, _) in enumerate(processed_results):
+                for conversation in results:
+                    conversation_text = ''.join(turn['value'] for turn in conversation.get('conversations', []) 
+                                              if turn.get('value') is not None)
+                    if method == 'sha256':
+                        hash_val = self.generate_sha256_hash(conversation_text)
+                    else:
+                        minhash = self.generate_rminhash(conversation_text)
+                        hash_val = tuple(minhash.digest())
+                    
+                    if hash_val in self.unique_hashes:
+                        unique_data.append(conversation)
+                        self.unique_hashes.remove(hash_val)  # Remove to avoid duplicates
+            
+            # Count duplicates
+            self.duplicate_count = len(data) - len(unique_data)
+            
+            # Write to output file
+            with jsonlines.open(output_file, mode='w') as writer:
+                writer.write_all(unique_data)
+            
+            logging.info(f"Deduplication complete. Removed {self.duplicate_count} duplicates. Output: {output_file}")
+            return output_file
+            
         except Exception as e:
-            logging.error(f"Error during MinHash deduplication: {e}", exc_info=True)
-
-    def _calc_optimal_bands(self, num_perm, threshold):
-        import math
-        rows = int(num_perm / math.ceil(num_perm * threshold))
-        if rows == 0:
-            rows = 1
-        return math.ceil(num_perm / rows)
-
+            logging.error(f"Error during {method} deduplication: {e}", exc_info=True)
+            raise
+    
     @staticmethod
-    def generate_sha256_hash(conversation):
-        conversation_text = ''.join(turn['value'] for turn in conversation.get('conversations', []) if turn.get('value') is not None)
-        return hashlib.sha256(conversation_text.encode('utf-8')).hexdigest()
-
-    @staticmethod
-    def generate_min_hash(text):
-        m = RMinHash(num_perm=128, seed=42)
-        tokens = text.split()
-        m.update(tokens)
-        return m
-
-def update_status(message):
-    print(message)
-
-def update_progress(current, total):
-    progress = (current / total) * 100 if total > 0 else 100
-    print(f"Progress: {progress:.2f}%")
+    def generate_sha256_hash(text):
+        """Generate a SHA-256 hash for text."""
+        return hashlib.sha256(text.encode('utf-8')).hexdigest()
+    
+    def generate_rminhash(self, text):
+        """Generate a Rensa MinHash signature for text."""
+        minhash = RMinHash(num_perm=self.num_perm, seed=42)
+        # Split text into words for better performance with RMinHash
+        minhash.update(text.split())
+        return minhash
 
 def main():
     parser = argparse.ArgumentParser(description="Deduplication tool for conversations")
-    parser.add_argument('input', help="Input JSONL file with conversations")
-    parser.add_argument('output_dir', help="Directory to save deduplicated output")
-    parser.add_argument('--method', choices=['sha256', 'minhash'], default='sha256', help="Deduplication method to use (default: sha256)")
-    parser.add_argument('--threshold', type=float, default=0.8, help="Threshold for MinHash deduplication (default: 0.8)")
+    parser.add_argument('input_file', type=str, help="Input JSONL file with conversations")
+    parser.add_argument('output_dir', type=str, help="Output directory for deduplicated conversations")
+    parser.add_argument('--method', choices=['sha256', 'minhash'], default='sha256', 
+                        help="Deduplication method to use (default: sha256)")
+    parser.add_argument('--threshold', type=float, default=0.8, 
+                        help="Threshold for MinHash similarity (default: 0.8)")
+    parser.add_argument('--processes', type=int, default=None, 
+                        help="Number of processes to use (default: CPU count - 1)")
+    
     args = parser.parse_args()
-
-    dedup = Deduplication(threshold=args.threshold)
     
-    os.makedirs(args.output_dir, exist_ok=True)
+    # Initialize deduplication object
+    dedup = Deduplication(threshold=args.threshold, num_processes=args.processes)
     
-    base_name = os.path.splitext(os.path.basename(args.input))[0]
-    output_file = os.path.join(args.output_dir, f"{base_name}_deduplicated.jsonl")
-    
-    if args.method == 'sha256':
-        dedup.perform_sha256_deduplication(args.input, output_file, update_status, update_progress)
-    elif args.method == 'minhash':
-        dedup.perform_min_hash_deduplication(args.input, output_file, update_status, update_progress)
+    # Perform deduplication
+    dedup.perform_deduplication(args.input_file, args.output_dir, method=args.method)
 
 if __name__ == "__main__":
     main()

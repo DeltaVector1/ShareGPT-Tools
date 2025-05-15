@@ -48,3 +48,6 @@ Traceback (most recent call last):
     self.lsh.insert(str(i), m)  # Using index as key, converted to string
     ^^^^^^^^^^^^^^^^^^^^^^^^^^
 TypeError: argument 'key': 'str' object cannot be interpreted as an integer
+2025-05-15 03:48:16,318 - INFO - Deduplication complete. Removed 0 duplicates. Output: ./deduped/deduplicated_prax_deslopped.jsonl
+2025-05-15 03:50:52,110 - INFO - Deduplication complete. Removed 0 duplicates. Output: ./deduped/deduplicated_prax_deslopped.jsonl
+2025-05-15 03:57:42,039 - INFO - Deduplication complete. Removed 980 duplicates. Output: ./deduped-2/deduplicated_openhermes2_5.jsonl
