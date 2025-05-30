@@ -1,32 +1,31 @@
-'t know
-'t want
-of course ,
-, of course
-his head .
-'ve got
-'t think
-let 's
-'s face
-'s eyes
+. here 's
+for example ,
+. for example
+` python import
+'s an example
+수 있습니다 .
+, it 's
+use the `
+create a new
 4-grams:
-shook his head .
-shook her head .
-took a deep breath
-let 's go
-let 's get
-a deep breath .
-'t even know
-the first time ,
-a deep breath ,
-fora moment , then
+sure , i 'd
+. let me know
+, you 'll need
+import numpy as np
+import pandas as pd
+follow these steps :
+'s important to note
+, it 's important
+def __init__ ( self
+these steps : 1.
 5-grams:
-took a deep breath .
-took a deep breath ,
-one way or another ,
-the twenty - first century
-the k ' chain che
-one way or another .
-drew a deep breath .
-∞ ∞ ∞ ∞ ∞
-taking a deep breath ,
-the capital / income ratio
+follow these steps : 1.
+` python import pandas as
+python import pandas as pd
+` python import numpy as
+python import numpy as np
+except exception as e 
+import pandas as pd import
+however , it 's important
+helps ! let me know
+hope this helps ! let
