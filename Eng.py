@@ -1,7 +1,7 @@
 import os
 import argparse
 from pathlib import Path
-from contextlib import nullcontext, redirect_stderr
+from contextlib import nullcontext
 from multiprocessing import Pool, cpu_count
 import json
 import fasttext
@@ -10,6 +10,8 @@ from tqdm import tqdm
 import regex as re
 import io
 import sys
+import psutil
+import gc
 
 MODEL_URL = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz"
 MODEL_FILENAME = "lid.176.ftz"
@@ -45,14 +47,25 @@ def load_fasttext_model():
     return model
 
 def init_worker():
+    """Initialize worker with error handling and memory management."""
     global _model
-    _model = load_fasttext_model()
+    try:
+        _model = load_fasttext_model()
+        # Force garbage collection after model loading
+        gc.collect()
+    except Exception as e:
+        print(f"Worker initialization failed: {e}")
+        _model = None
+        raise
 
 def get_model():
     return _model
 
 def is_mostly_english_batch(texts, threshold):
     model = get_model()
+    if model is None:
+        raise RuntimeError("Model not loaded in worker process")
+    
     sanitized = [t.replace('\n', ' ') for t in texts]
     predictions = model.predict(sanitized, k=1)
     return [(lang[0], prob[0]) for lang, prob in zip(predictions[0], predictions[1])]
@@ -72,32 +85,72 @@ def process_batch(args):
     english_count = non_english_count = json_error_count = 0
     data_objects = []
 
-    for idx, line in zip(batch_indices, lines):
-        try:
-            data = json.loads(line)
-            text = extract_gpt_text(data)
-            data_objects.append((idx, line, data, text))
-        except Exception:
-            rejected_entries.append(line.strip())
-            json_error_count += 1
+    try:
+        # Parse JSON first
+        for idx, line in zip(batch_indices, lines):
+            try:
+                data = json.loads(line)
+                text = extract_gpt_text(data)
+                data_objects.append((idx, line, data, text))
+            except Exception:
+                rejected_entries.append(line.strip())
+                json_error_count += 1
 
-    if not data_objects:
-        return valid_entries, rejected_entries, english_count, non_english_count, json_error_count
+        if not data_objects:
+            return valid_entries, rejected_entries, english_count, non_english_count, json_error_count
 
-    predictions = is_mostly_english_batch([x[3] for x in data_objects], threshold)
-    for (idx, line, data, text), (lang, prob) in zip(data_objects, predictions):
-        if lang == "__label__en" and prob >= threshold and not contains_unwanted_unicode(text):
-            valid_entries.append(json.dumps(data, ensure_ascii=False))
-            english_count += 1
-        else:
-            rejected_entries.append(line.strip())
-            non_english_count += 1
+        # Language detection
+        predictions = is_mostly_english_batch([x[3] for x in data_objects], threshold)
+        for (idx, line, data, text), (lang, prob) in zip(data_objects, predictions):
+            if lang == "__label__en" and prob >= threshold and not contains_unwanted_unicode(text):
+                valid_entries.append(json.dumps(data, ensure_ascii=False))
+                english_count += 1
+            else:
+                rejected_entries.append(line.strip())
+                non_english_count += 1
+
+    except Exception as e:
+        print(f"Error in batch processing: {e}")
+        # Return all as rejected if processing fails
+        rejected_entries.extend([line.strip() for line in lines])
+        non_english_count += len(lines)
 
     return valid_entries, rejected_entries, english_count, non_english_count, json_error_count
 
+def get_optimal_workers():
+    """Calculate optimal number of workers based on available memory."""
+    # Get available memory in GB
+    available_memory_gb = psutil.virtual_memory().available / (1024**3)
+    
+    # FastText model uses roughly 200-300MB per process
+    # Leave some headroom for other operations
+    model_memory_gb = 0.5  # Conservative estimate including overhead
+    max_workers_by_memory = max(1, int(available_memory_gb / model_memory_gb))
+    
+    # Don't exceed CPU count
+    max_workers_by_cpu = max(1, cpu_count() - 1)
+    
+    optimal = min(max_workers_by_memory, max_workers_by_cpu, 8)  # Cap at 8 for stability
+    
+    print(f"Available memory: {available_memory_gb:.1f}GB")
+    print(f"Max workers by memory: {max_workers_by_memory}")
+    print(f"Max workers by CPU: {max_workers_by_cpu}")
+    print(f"Selected workers: {optimal}")
+    
+    return optimal
+
 def filter_english_jsonl(input_path, output_dir, threshold=0.69, batch_size=256, workers=None, save_rejected=False):
     if workers is None:
-        workers = max(1, cpu_count() - 1)
+        workers = get_optimal_workers()
+    else:
+        # Validate user-specified worker count
+        optimal = get_optimal_workers()
+        if workers > optimal:
+            print(f"Warning: Requested {workers} workers, but {optimal} is recommended based on available resources.")
+            response = input("Continue anyway? (y/n): ").lower()
+            if response != 'y':
+                print("Exiting...")
+                return None
 
     input_path = Path(input_path)
     output_dir = Path(output_dir)
@@ -119,6 +172,18 @@ def filter_english_jsonl(input_path, output_dir, threshold=0.69, batch_size=256,
     print(f"English threshold: {threshold}")
     print()
 
+    # Load model in main process first to check for issues
+    try:
+        print("Testing model loading...")
+        test_model = load_fasttext_model()
+        del test_model
+        gc.collect()
+        print("Model loading test successful!")
+    except Exception as e:
+        print(f"Error: Cannot load FastText model: {e}")
+        print("Try reducing the number of workers or check available memory.")
+        return None
+
     with open(input_path, 'r', encoding='utf-8') as infile:
         lines = infile.readlines()
 
@@ -130,21 +195,26 @@ def filter_english_jsonl(input_path, output_dir, threshold=0.69, batch_size=256,
 
     english_total = non_english_total = json_error_total = 0
 
-    with Pool(workers, initializer=init_worker) as pool, \
-         open(output_path, 'w', encoding='utf-8') as outfile, \
-         open(rejected_path, 'w', encoding='utf-8') if rejected_path else nullcontext() as rejfile:
+    try:
+        with Pool(workers, initializer=init_worker) as pool, \
+             open(output_path, 'w', encoding='utf-8') as outfile, \
+             open(rejected_path, 'w', encoding='utf-8') if rejected_path else nullcontext() as rejfile:
 
-        with tqdm(total=total_lines, desc="Filtering English JSONL") as pbar:
-            for valid_entries, rejected_entries, eng, non_eng, err in pool.imap_unordered(process_batch, batches):
-                for entry in valid_entries:
-                    outfile.write(entry + "\n")
-                if rejfile:
-                    for entry in rejected_entries:
-                        rejfile.write(entry + "\n")
-                english_total += eng
-                non_english_total += non_eng
-                json_error_total += err
-                pbar.update(eng + non_eng + err)
+            with tqdm(total=total_lines, desc="Filtering English JSONL") as pbar:
+                for valid_entries, rejected_entries, eng, non_eng, err in pool.imap_unordered(process_batch, batches):
+                    for entry in valid_entries:
+                        outfile.write(entry + "\n")
+                    if rejfile:
+                        for entry in rejected_entries:
+                            rejfile.write(entry + "\n")
+                    english_total += eng
+                    non_english_total += non_eng
+                    json_error_total += err
+                    pbar.update(eng + non_eng + err)
+
+    except Exception as e:
+        print(f"Error during processing: {e}")
+        return None
 
     # Print summary
     print(f"\nProcessing complete!")
@@ -168,8 +238,9 @@ def main():
         epilog="""
 Examples:
   %(prog)s input.jsonl output/
-  %(prog)s data.jsonl results/ --threshold 0.8 --workers 8
+  %(prog)s data.jsonl results/ --threshold 0.8 --workers 4
   %(prog)s conversations.jsonl filtered/ --save-rejected --batch-size 512
+  %(prog)s large_file.jsonl output/ --workers 2  # For memory-constrained systems
         """
     )
     
@@ -203,7 +274,7 @@ Examples:
         "--workers",
         type=int,
         default=None,
-        help="Number of worker processes (default: CPU count - 1)"
+        help="Number of worker processes (default: auto-detect based on available memory)"
     )
     
     parser.add_argument(
@@ -235,7 +306,7 @@ Examples:
         sys.exit(1)
 
     try:
-        filter_english_jsonl(
+        result = filter_english_jsonl(
             input_path=args.input_file,
             output_dir=args.output_dir,
             threshold=args.threshold,
@@ -243,6 +314,10 @@ Examples:
             workers=args.workers,
             save_rejected=args.save_rejected
         )
+        
+        if result is None:
+            sys.exit(1)
+            
     except KeyboardInterrupt:
         print("\nProcessing interrupted by user.")
         sys.exit(1)
